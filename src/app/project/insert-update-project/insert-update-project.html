@@ -124,14 +124,16 @@
                                         <label class="form-label fw-semibold">Latitude</label>
                                         <input type="number" class="form-control" [(ngModel)]="formData.latitude" 
                                                name="latitude" step="any" placeholder="Enter latitude"
-                                               (blur)="onCoordinateChange()">
+                                               (blur)="onCoordinateChange()"
+                                               (keyup.enter)="onCoordinateChange()">
                                         <small class="text-muted">Or click on the map below to pick a location</small>
                                     </div>
                                     <div class="col-md-6">
                                         <label class="form-label fw-semibold">Longitude</label>
                                         <input type="number" class="form-control" [(ngModel)]="formData.longitude" 
                                                name="longitude" step="any" placeholder="Enter longitude"
-                                               (blur)="onCoordinateChange()">
+                                               (blur)="onCoordinateChange()"
+                                               (keyup.enter)="onCoordinateChange()">
                                         <small class="text-muted">Or click on the map below to pick a location</small>
                                     </div>
 

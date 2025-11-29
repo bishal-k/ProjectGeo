@@ -2293,11 +2293,35 @@ export class MapForInsert implements AfterViewInit, OnDestroy {
 
   // Public method to programmatically set location from form fields
   public setLocationFromCoordinates(latitude: number | null, longitude: number | null): void {
-    if (latitude !== null && longitude !== null && this.map && this.L) {
+    console.log("=== setLocationFromCoordinates called ===", {
+      latitude,
+      longitude,
+      latitudeType: typeof latitude,
+      longitudeType: typeof longitude,
+      hasMap: !!this.map,
+      hasL: !!this.L,
+      mapReady: this.isMapReady
+    });
+    
+    // If map is not ready, wait a bit and try again
+    if (!this.isMapReady || !this.map || !this.L) {
+      console.warn("Map not ready, waiting...", {
+        isMapReady: this.isMapReady,
+        hasMap: !!this.map,
+        hasL: !!this.L
+      });
+      setTimeout(() => {
+        this.setLocationFromCoordinates(latitude, longitude);
+      }, 500);
+      return;
+    }
+    
+    if (latitude !== null && longitude !== null) {
       const lat = Number(latitude);
       const lng = Number(longitude);
 
       if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+        console.log("Updating location picker marker at:", lat, lng);
         // Remove previous marker
         this.clearLocationPickerMarker();
 

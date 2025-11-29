@@ -40,7 +40,9 @@ export class InsertUpdateProject {
     selectedProjectName: '',
     newProjectName: '',
     selectedSchemeType: '',
-    newSchemeType: ''
+    newSchemeType: '',
+    districtName: '',
+    mouzaName: ''
   };
 
   projectNames = [
@@ -388,7 +390,9 @@ export class InsertUpdateProject {
       selectedProjectName: '',
       newProjectName: '',
       selectedSchemeType: '',
-      newSchemeType: ''
+      newSchemeType: '',
+      districtName: this.userProfile()?.districts[0] || '',
+      mouzaName: this.userProfile()?.blocks[0] || ''
     };
     this.beneficiaryDocuments = [];
     this.planEstimationFiles = [];
@@ -465,6 +469,24 @@ export class InsertUpdateProject {
     // Example: this.http.post('/api/submit', formDataToSubmit).subscribe(...)
 
     alert('Application submitted successfully! Confirmation & verification will be done by the authority.');
+    this.storeToLocalStorage();
+  }
+
+  storeToLocalStorage(): void {
+    // get already store data
+    const existingData = localStorage.getItem('projectData');
+    let data = [];
+    if (existingData) {
+      const existingDataObj = JSON.parse(existingData);
+      if(existingDataObj && existingDataObj.length>0){
+        existingDataObj.push(this.formData as any);
+        data = existingDataObj;
+      } else {
+        data = [ this.formData as any ] as any;
+      }
+    }
+    localStorage.setItem('projectData', JSON.stringify(data));
+    this.router.navigate(['/home']);
   }
 
   // Stepper navigation methods
@@ -547,6 +569,7 @@ export class InsertUpdateProject {
 
   // Handle location selection from map
   onLocationSelected(event: { latitude: number; longitude: number }): void {
+    console.log("data from map", event);
     this.formData.latitude = event.latitude;
     this.formData.longitude = event.longitude;
     this.cdr.detectChanges();
@@ -554,16 +577,48 @@ export class InsertUpdateProject {
 
   // Sync coordinates from form to map when user manually enters them
   onCoordinateChange(): void {
-    if (this.mapComponent && this.formData.latitude !== null && this.formData.longitude !== null) {
+    console.log("onCoordinateChange called", {
+      hasMapComponent: !!this.mapComponent,
+      mapComponent: this.mapComponent,
+      latitude: this.formData.latitude,
+      longitude: this.formData.longitude
+    });
+
+    // Check if both coordinates are valid numbers
+    const lat = this.formData.latitude;
+    const lng = this.formData.longitude;
+    
+    if (lat !== null && lat !== undefined && lng !== null && lng !== undefined && 
+        !isNaN(Number(lat)) && !isNaN(Number(lng))) {
+      
+      // Ensure map is initialized first
+      if (!this.mapComponent) {
+        console.warn("mapComponent is not available, waiting...");
+        setTimeout(() => this.onCoordinateChange(), 500);
+        return;
+      }
+
       // Delay to allow map to initialize if needed
       setTimeout(() => {
-        if (this.mapComponent) {
+        if (this.mapComponent && typeof this.mapComponent.setLocationFromCoordinates === 'function') {
+          console.log("Calling setLocationFromCoordinates with:", lat, lng);
           this.mapComponent.setLocationFromCoordinates(
-            this.formData.latitude,
-            this.formData.longitude
+            Number(lat),
+            Number(lng)
           );
+        } else {
+          console.warn("mapComponent or setLocationFromCoordinates method not available after timeout", {
+            hasMapComponent: !!this.mapComponent,
+            hasMethod: this.mapComponent ? typeof this.mapComponent.setLocationFromCoordinates : 'no component'
+          });
         }
       }, 300);
+    } else {
+      console.warn("Cannot update location: invalid coordinates", {
+        lat,
+        lng,
+        hasMapComponent: !!this.mapComponent
+      });
     }
   }
 }
