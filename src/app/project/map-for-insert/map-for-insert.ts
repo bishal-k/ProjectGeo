@@ -1,5 +1,5 @@
 import { CommonModule, isPlatformBrowser } from '@angular/common';
-import { AfterViewInit, ApplicationRef, ChangeDetectorRef, Component, computed, effect, ElementRef, Inject, NgZone, OnDestroy, PLATFORM_ID, signal, ViewChild, ViewEncapsulation } from '@angular/core';
+import { AfterViewInit, ApplicationRef, ChangeDetectorRef, Component, computed, effect, ElementRef, EventEmitter, Inject, NgZone, OnDestroy, Output, PLATFORM_ID, signal, ViewChild, ViewEncapsulation } from '@angular/core';
 import { Subscription } from 'rxjs';
 import { MapSelectionService } from '../../map-selection.service';
 import { IDefaultUser, AuthService } from '../../services/auth/auth';
@@ -506,6 +506,16 @@ import { IDefaultUser, AuthService } from '../../services/auth/auth';
       animation: pulse-ring 2s infinite;
       pointer-events: none;
     }
+
+    /* Location picker marker styles */
+    .location-picker-marker {
+      cursor: move;
+    }
+
+    .location-picker-marker:hover {
+      transform: scale(1.1);
+      transition: transform 0.2s;
+    }
   `]
 })
 export class MapForInsert implements AfterViewInit, OnDestroy {
@@ -539,6 +549,15 @@ export class MapForInsert implements AfterViewInit, OnDestroy {
   showLocationDetails = signal<boolean>(false);
   selectedLocation = signal<any>(null);
   activeTab: string = 'info'; // Active tab in location details panel
+
+  // Location picker marker
+  private locationPickerMarker: any = null;
+  
+  // Output event for location selection
+  @Output() locationSelected = new EventEmitter<{ latitude: number; longitude: number }>();
+
+  // Flag to track if a layer click just occurred (to prevent location picking on new selections)
+  private layerClickJustHandled: boolean = false;
 
   // Computed signal for panel visibility
   shouldShowPanel = computed(() => {
@@ -859,6 +878,13 @@ export class MapForInsert implements AfterViewInit, OnDestroy {
       // Add My Location button
       this.addMyLocationControl();
 
+      // Add map click handler for location selection
+      this.map.on('click', (e: any) => {
+        this.ngZone.run(() => {
+          this.onMapClick(e);
+        });
+      });
+
       // Ensure map resizes properly
       setTimeout(() => {
         if (this.map) {
@@ -1128,11 +1154,28 @@ export class MapForInsert implements AfterViewInit, OnDestroy {
       onEachFeature: (feature: any, layer: any) => {
         const name = feature.properties["District N"] || feature.properties.district;
         districtMap.set(name, layer);
-        this.highlightDistrict(layer, name);
-        layer.on('click', () => {
+        layer.on('click', (e: any) => {
+          // Check if this district is already selected
+          if (this.selectedDistrict === name) {
+            // Already selected - allow location picking by calling pickLocation directly
+            const latlng = e.latlng || (e.originalEvent ? this.map.mouseEventToLatLng(e.originalEvent) : null);
+            if (latlng) {
+              this.pickLocation(latlng);
+            }
+            return;
+          }
+          
+          // New district selection - mark flag to prevent location picking for this click
+          this.layerClickJustHandled = true;
+          
           this.ngZone.run(() => {
             this.highlightDistrict(layer, name);
           });
+
+          // Reset flag after a delay to allow location picking on subsequent clicks
+          setTimeout(() => {
+            this.layerClickJustHandled = false;
+          }, 200);
         });
       }
     }).addTo(this.map);
@@ -1312,8 +1355,20 @@ export class MapForInsert implements AfterViewInit, OnDestroy {
       style: { color: '#9A1FFF', weight: 1, fillOpacity: 0 },
       onEachFeature: (feature: any, layer: any) => {
         const mouzaName = feature.properties["Mouza Name"] || feature.properties.subdistrict;
-        this.highlightMouza(feature, layer);
-        layer.on('click', () => {
+        layer.on('click', (e: any) => {
+          // Check if this mouza is already selected
+          if (this.selectedMouza === mouzaName) {
+            // Already selected - allow location picking by calling pickLocation directly
+            const latlng = e.latlng || (e.originalEvent ? this.map.mouseEventToLatLng(e.originalEvent) : null);
+            if (latlng) {
+              this.pickLocation(latlng);
+            }
+            return;
+          }
+          
+          // New mouza selection - mark flag to prevent location picking for this click
+          this.layerClickJustHandled = true;
+          
           this.ngZone.run(() => {
             this.selectedMouza = mouzaName;
             this.highlightMouza(feature, layer);
@@ -1322,6 +1377,11 @@ export class MapForInsert implements AfterViewInit, OnDestroy {
             this.cdr.markForCheck();
             this.cdr.detectChanges();
           });
+
+          // Reset flag after a delay to allow location picking on subsequent clicks
+          setTimeout(() => {
+            this.layerClickJustHandled = false;
+          }, 200);
         });
         this.mouzaCount++;
       }
@@ -2129,6 +2189,178 @@ export class MapForInsert implements AfterViewInit, OnDestroy {
           });
         }, 100);
       }, 300);
+    }
+  }
+
+  // Location picker methods
+  onMapClick(e: any): void {
+    if (!this.map || !this.L) {
+      return;
+    }
+
+    // Use a delay to check if a layer was just clicked
+    // This allows location picking even inside highlighted areas after initial selection
+    setTimeout(() => {
+      // Only pick location if no layer click was just handled
+      // This prevents picking when clicking to SELECT a district/mouza
+      if (!this.layerClickJustHandled) {
+        this.pickLocation(e.latlng);
+      }
+      // Reset flag for next click
+      this.layerClickJustHandled = false;
+    }, 100);
+  }
+
+  private pickLocation(latlng: any): void {
+    if (!this.map || !this.L) {
+      return;
+    }
+
+    const lat = latlng.lat;
+    const lng = latlng.lng;
+
+    // Remove previous location picker marker if exists
+    this.clearLocationPickerMarker();
+
+    // Create a new marker at the clicked location
+    const pickerIcon = this.L.divIcon({
+      className: 'location-picker-marker',
+      html: `<div style="
+        background-color: #0d6efd;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        border: 4px solid white;
+        box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.3), 0 4px 12px rgba(0, 0, 0, 0.4);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: bold;
+        font-size: 18px;
+        cursor: pointer;
+      ">📍</div>`,
+      iconSize: [32, 32],
+      iconAnchor: [16, 32],
+      popupAnchor: [0, -32]
+    });
+
+    this.locationPickerMarker = this.L.marker([lat, lng], {
+      icon: pickerIcon,
+      draggable: true,
+      zIndexOffset: 10000
+    }).addTo(this.map);
+
+    // Add popup with coordinates
+    this.locationPickerMarker.bindPopup(`
+      <div style="text-align: center; padding: 5px;">
+        <strong>Selected Location</strong><br>
+        <small>Lat: ${lat.toFixed(6)}<br>Lng: ${lng.toFixed(6)}</small>
+      </div>
+    `).openPopup();
+
+    // Handle marker drag
+    this.locationPickerMarker.on('dragend', (dragEvent: any) => {
+      const newLat = dragEvent.target.getLatLng().lat;
+      const newLng = dragEvent.target.getLatLng().lng;
+      
+      // Update popup with new coordinates
+      this.locationPickerMarker.setPopupContent(`
+        <div style="text-align: center; padding: 5px;">
+          <strong>Selected Location</strong><br>
+          <small>Lat: ${newLat.toFixed(6)}<br>Lng: ${newLng.toFixed(6)}</small>
+        </div>
+      `).openPopup();
+
+      // Emit updated coordinates
+      this.ngZone.run(() => {
+        this.locationSelected.emit({ latitude: newLat, longitude: newLng });
+      });
+    });
+
+    // Emit coordinates to parent component
+    this.locationSelected.emit({ latitude: lat, longitude: lng });
+
+    this.cdr.detectChanges();
+  }
+
+  private clearLocationPickerMarker(): void {
+    if (this.locationPickerMarker) {
+      this.map.removeLayer(this.locationPickerMarker);
+      this.locationPickerMarker = null;
+    }
+  }
+
+  // Public method to programmatically set location from form fields
+  public setLocationFromCoordinates(latitude: number | null, longitude: number | null): void {
+    if (latitude !== null && longitude !== null && this.map && this.L) {
+      const lat = Number(latitude);
+      const lng = Number(longitude);
+
+      if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+        // Remove previous marker
+        this.clearLocationPickerMarker();
+
+        // Create marker at specified coordinates
+        const pickerIcon = this.L.divIcon({
+          className: 'location-picker-marker',
+          html: `<div style="
+            background-color: #0d6efd;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: 4px solid white;
+            box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.3), 0 4px 12px rgba(0, 0, 0, 0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 18px;
+            cursor: pointer;
+          ">📍</div>`,
+          iconSize: [32, 32],
+          iconAnchor: [16, 32],
+          popupAnchor: [0, -32]
+        });
+
+        this.locationPickerMarker = this.L.marker([lat, lng], {
+          icon: pickerIcon,
+          draggable: true,
+          zIndexOffset: 10000
+        }).addTo(this.map);
+
+        // Add popup
+        this.locationPickerMarker.bindPopup(`
+          <div style="text-align: center; padding: 5px;">
+            <strong>Selected Location</strong><br>
+            <small>Lat: ${lat.toFixed(6)}<br>Lng: ${lng.toFixed(6)}</small>
+          </div>
+        `);
+
+        // Handle marker drag
+        this.locationPickerMarker.on('dragend', (dragEvent: any) => {
+          const newLat = dragEvent.target.getLatLng().lat;
+          const newLng = dragEvent.target.getLatLng().lng;
+          
+          this.locationPickerMarker.setPopupContent(`
+            <div style="text-align: center; padding: 5px;">
+              <strong>Selected Location</strong><br>
+              <small>Lat: ${newLat.toFixed(6)}<br>Lng: ${newLng.toFixed(6)}</small>
+            </div>
+          `).openPopup();
+
+          this.ngZone.run(() => {
+            this.locationSelected.emit({ latitude: newLat, longitude: newLng });
+          });
+        });
+
+        // Center map on location
+        this.map.setView([lat, lng], 13, {
+          animate: true,
+          duration: 0.5
+        });
+      }
     }
   }
 }

@@ -544,4 +544,26 @@ export class InsertUpdateProject {
       }
     }
   }
+
+  // Handle location selection from map
+  onLocationSelected(event: { latitude: number; longitude: number }): void {
+    this.formData.latitude = event.latitude;
+    this.formData.longitude = event.longitude;
+    this.cdr.detectChanges();
+  }
+
+  // Sync coordinates from form to map when user manually enters them
+  onCoordinateChange(): void {
+    if (this.mapComponent && this.formData.latitude !== null && this.formData.longitude !== null) {
+      // Delay to allow map to initialize if needed
+      setTimeout(() => {
+        if (this.mapComponent) {
+          this.mapComponent.setLocationFromCoordinates(
+            this.formData.latitude,
+            this.formData.longitude
+          );
+        }
+      }, 300);
+    }
+  }
 }
