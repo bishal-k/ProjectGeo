@@ -1,4 +1,4 @@
-import { ChangeDetectorRef, Component, signal, ViewChild } from '@angular/core';
+import { ChangeDetectorRef, Component, OnInit, signal, ViewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { MapComponent } from '../../map/map';
@@ -13,14 +13,33 @@ interface FileWithPreview {
   type: 'image' | 'document' | 'video';
   category: 'beneficiary' | 'plan' | 'tender' | 'other' | 'media' | 'aoi';
 }
-
+ export interface IProjectData {
+    projectName: string;
+  activityName: string;
+  schemeType: string;
+  locationName: string;
+  latitude: number | null;
+  longitude: number | null;
+  aoiFile: any;
+  beneficiaryName: string;
+  beneficiaryDetails: string;
+  estimatedCost: number | null;
+  finalCost: number | null;
+  fundType: string;
+  selectedProjectName: string;
+  newProjectName: string;
+  selectedSchemeType: string;
+  newSchemeType: string;
+  districtName: string;
+  mouzaName: string;
+ }
 @Component({
   selector: 'app-insert-update-project',
   imports: [FormsModule, CommonModule, MapForInsert],
   templateUrl: './insert-update-project.html',
   styleUrl: './insert-update-project.scss',
 })
-export class InsertUpdateProject {
+export class InsertUpdateProject implements OnInit {
   currentStep: number = 1;
   totalSteps: number = 5;
 
@@ -96,6 +115,103 @@ export class InsertUpdateProject {
     private router: Router
   ) {
     this.getUserProfile();
+  }
+
+  ngOnInit(): void {
+    // Load project data from sessionStorage if available
+    this.loadProjectData();
+  }
+
+  private loadProjectData(): void {
+    const projectDataStr = sessionStorage.getItem('selectedProjectData');
+    if (projectDataStr) {
+      try {
+        const projectData: IProjectData = JSON.parse(projectDataStr);
+        this.bindProjectData(projectData);
+        // Clear the sessionStorage after loading
+        sessionStorage.removeItem('selectedProjectData');
+      } catch (error) {
+        console.error('Error parsing project data:', error);
+      }
+    }
+  }
+
+  private bindProjectData(project: IProjectData): void {
+    // Bind project data to form
+    if (project.projectName) {
+      this.formData.projectName = project.projectName;
+      // Check if projectName exists in the dropdown list
+      if (this.projectNames.includes(project.projectName)) {
+        this.formData.selectedProjectName = project.projectName;
+      } else {
+        this.formData.selectedProjectName = 'MISC. (Create new)';
+        this.formData.newProjectName = project.projectName;
+      }
+    }
+
+    if (project.activityName) {
+      this.formData.activityName = project.activityName;
+    }
+
+    if (project.schemeType) {
+      this.formData.schemeType = project.schemeType;
+      // Check if schemeType exists in the dropdown list
+      if (this.schemeTypes.includes(project.schemeType)) {
+        this.formData.selectedSchemeType = project.schemeType;
+      } else {
+        this.formData.selectedSchemeType = 'Misc. (Create new)';
+        this.formData.newSchemeType = project.schemeType;
+      }
+    }
+
+    if (project.locationName) {
+      this.formData.locationName = project.locationName;
+    }
+
+    if (project.latitude !== null && project.latitude !== undefined) {
+      this.formData.latitude = project.latitude;
+    }
+
+    if (project.longitude !== null && project.longitude !== undefined) {
+      this.formData.longitude = project.longitude;
+    }
+
+    if (project.beneficiaryName) {
+      this.formData.beneficiaryName = project.beneficiaryName;
+    }
+
+    if (project.beneficiaryDetails) {
+      this.formData.beneficiaryDetails = project.beneficiaryDetails;
+    }
+
+    if (project.estimatedCost !== null && project.estimatedCost !== undefined) {
+      this.formData.estimatedCost = project.estimatedCost;
+    }
+
+    if (project.finalCost !== null && project.finalCost !== undefined) {
+      this.formData.finalCost = project.finalCost;
+    }
+
+    if (project.fundType) {
+      this.formData.fundType = project.fundType;
+    }
+
+    if (project.districtName) {
+      this.formData.districtName = project.districtName;
+    }
+
+    if (project.mouzaName) {
+      this.formData.mouzaName = project.mouzaName;
+    }
+
+    // If coordinates are available, update the map after a short delay
+    if (this.formData.latitude !== null && this.formData.longitude !== null) {
+      setTimeout(() => {
+        this.onCoordinateChange();
+      }, 500);
+    }
+
+    this.cdr.detectChanges();
   }
   ngAfterViewInit(): void {
     // Wait a bit for map component to initialize

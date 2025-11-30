@@ -55,7 +55,7 @@ import { AuthService, IDefaultUser } from '../services/auth/auth';
       <div class="location-info">
         <!-- Tab Navigation -->
          <div style="display:flex; align-items:center; justify-content:flex-end;">
-           <a  href="/projects" class="projects-link" target="_blank" style="color:#0066cc; text-decoration:none; font-weight:500; font-size:13px;">
+           <a  (click)="openProjectInNewTab(); $event.preventDefault()" class="projects-link" style="color:#0066cc; text-decoration:none; font-weight:500; font-size:13px; cursor:pointer;">
              View Project Details
            </a>
            <i class="fas fa-external-link-alt" style="color:#0066cc"></i>
@@ -95,6 +95,42 @@ import { AuthService, IDefaultUser } from '../services/auth/auth';
               <strong>Coordinates:</strong> 
               <span>{{ selectedLocation()?.latitude?.toFixed(4) }}, {{ selectedLocation()?.longitude?.toFixed(4) }}</span>
             </div>
+            <div *ngIf="currentProjectData?.projectName" class="location-description" style="margin-bottom: 15px;">
+              <strong>Project Name:</strong>
+              <p style="margin: 5px 0 0 0; color: #555;">{{ currentProjectData.projectName }}</p>
+            </div>
+            <div *ngIf="currentProjectData?.activityName" class="location-description" style="margin-bottom: 15px;">
+              <strong>Activity Name:</strong>
+              <p style="margin: 5px 0 0 0; color: #555;">{{ currentProjectData.activityName }}</p>
+            </div>
+            <div *ngIf="currentProjectData?.schemeType" class="location-description" style="margin-bottom: 15px;">
+              <strong>Scheme Type:</strong>
+              <p style="margin: 5px 0 0 0; color: #555;">{{ currentProjectData.schemeType }}</p>
+            </div>
+            <div *ngIf="currentProjectData?.locationName" class="location-description" style="margin-bottom: 15px;">
+              <strong>Location:</strong>
+              <p style="margin: 5px 0 0 0; color: #555;">{{ currentProjectData.locationName }}</p>
+            </div>
+            <div *ngIf="currentProjectData?.estimatedCost !== null && currentProjectData?.estimatedCost !== undefined" class="location-description" style="margin-bottom: 15px;">
+              <strong>Estimated Cost:</strong>
+              <p style="margin: 5px 0 0 0; color: #555;">₹{{ currentProjectData.estimatedCost | number:'1.2-2' }}</p>
+            </div>
+            <div *ngIf="currentProjectData?.finalCost !== null && currentProjectData?.finalCost !== undefined" class="location-description" style="margin-bottom: 15px;">
+              <strong>Final Cost:</strong>
+              <p style="margin: 5px 0 0 0; color: #555;">₹{{ currentProjectData.finalCost | number:'1.2-2' }}</p>
+            </div>
+            <div *ngIf="currentProjectData?.fundType" class="location-description" style="margin-bottom: 15px;">
+              <strong>Fund Type:</strong>
+              <p style="margin: 5px 0 0 0; color: #555;">{{ currentProjectData.fundType }}</p>
+            </div>
+            <div *ngIf="currentProjectData?.districtName" class="location-description" style="margin-bottom: 15px;">
+              <strong>District:</strong>
+              <p style="margin: 5px 0 0 0; color: #555;">{{ currentProjectData.districtName }}</p>
+            </div>
+            <div *ngIf="currentProjectData?.mouzaName" class="location-description" style="margin-bottom: 15px;">
+              <strong>Mouza/Block:</strong>
+              <p style="margin: 5px 0 0 0; color: #555;">{{ currentProjectData.mouzaName }}</p>
+            </div>
             <div class="location-description">
               <strong>Description:</strong>
               <p>{{ selectedLocation()?.description }}</p>
@@ -105,9 +141,16 @@ import { AuthService, IDefaultUser } from '../services/auth/auth';
           <div *ngIf="activeTab === 'beneficiaries'" [class.active]="activeTab === 'beneficiaries'" class="tab-pane">
             <div class="tab-section">
               <h5>Beneficiaries Information</h5>
-              <p class="text-muted">Beneficiaries details will be displayed here.</p>
-              <div style="padding: 20px; background: #f8f9fa; border-radius: 6px; margin-top: 15px;">
-                <p style="color: #666; margin: 0;">Content area for beneficiaries information</p>
+              <div *ngIf="currentProjectData?.beneficiaryName" style="margin-bottom: 15px; padding: 15px; background: #f8f9fa; border-radius: 6px; border-left: 4px solid #ff6b35;">
+                <strong style="color: #333; display: block; margin-bottom: 8px;">Beneficiary Name:</strong>
+                <p style="color: #555; margin: 0;">{{ currentProjectData.beneficiaryName }}</p>
+              </div>
+              <div *ngIf="currentProjectData?.beneficiaryDetails" style="margin-bottom: 15px; padding: 15px; background: #f8f9fa; border-radius: 6px; border-left: 4px solid #ff6b35;">
+                <strong style="color: #333; display: block; margin-bottom: 8px;">Beneficiary Details:</strong>
+                <p style="color: #555; margin: 0; white-space: pre-wrap; line-height: 1.6;">{{ currentProjectData.beneficiaryDetails }}</p>
+              </div>
+              <div *ngIf="!currentProjectData?.beneficiaryName && !currentProjectData?.beneficiaryDetails" style="padding: 20px; background: #f8f9fa; border-radius: 6px; margin-top: 15px;">
+                <p class="text-muted" style="color: #999; margin: 0; text-align: center;">No beneficiary information available</p>
               </div>
             </div>
           </div>
@@ -116,9 +159,29 @@ import { AuthService, IDefaultUser } from '../services/auth/auth';
           <div *ngIf="activeTab === 'documentation'" [class.active]="activeTab === 'documentation'" class="tab-pane">
             <div class="tab-section">
               <h5>Documentation</h5>
-              <p class="text-muted">Documentation files will be displayed here.</p>
-              <div style="padding: 20px; background: #f8f9fa; border-radius: 6px; margin-top: 15px;">
-                <p style="color: #666; margin: 0;">Content area for documentation files</p>
+              <div *ngIf="currentProjectData?.aoiFile" style="margin-bottom: 15px; padding: 15px; background: #f8f9fa; border-radius: 6px; border-left: 4px solid #0066cc;">
+                <strong style="color: #333; display: block; margin-bottom: 8px;">Area of Interest (AOI) File:</strong>
+                <p style="color: #555; margin: 0;">
+                  <i class="fas fa-file" style="margin-right: 8px;"></i>
+                  {{ currentProjectData.aoiFile?.name || 'AOI File attached' }}
+                </p>
+              </div>
+              <div *ngIf="!currentProjectData?.aoiFile" style="padding: 20px; background: #f8f9fa; border-radius: 6px; margin-top: 15px; text-align: center;">
+                <div style="margin-bottom: 15px;">
+                  <img src="/assets/images/dacument.jpg" alt="Document placeholder" 
+                       style="max-width: 100%; height: auto; max-height: 200px; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                </div>
+                <div style="margin-bottom: 10px;">
+                  <img src="/assets/images/folder.jpg" alt="Folder placeholder" 
+                       style="max-width: 100%; height: auto; max-height: 150px; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                </div>
+                <!-- <p class="text-muted" style="color: #999; margin: 15px 0 0 0; text-align: center;">
+                  <i class="fas fa-file-alt" style="margin-right: 8px;"></i>
+                  No documentation files available
+                </p>
+                <p class="text-muted" style="color: #999; margin: 10px 0 0 0; font-size: 12px; text-align: center;">
+                  Documentation files can be viewed in the project details page
+                </p> -->
               </div>
             </div>
           </div>
@@ -127,9 +190,24 @@ import { AuthService, IDefaultUser } from '../services/auth/auth';
           <div *ngIf="activeTab === 'photovideo'" [class.active]="activeTab === 'photovideo'" class="tab-pane">
             <div class="tab-section">
               <h5>Photos & Videos</h5>
-              <p class="text-muted">Photos and videos will be displayed here.</p>
-              <div style="padding: 20px; background: #f8f9fa; border-radius: 6px; margin-top: 15px;">
-                <p style="color: #666; margin: 0;">Content area for photos and videos</p>
+              <div style="padding: 20px; background: #f8f9fa; border-radius: 6px; margin-top: 15px; text-align: center;">
+                <div style="margin-bottom: 20px;">
+                  <h6 style="color: #333; margin-bottom: 10px; font-size: 14px; font-weight: 600;">Photos</h6>
+                  <img src="/assets/images/imagedummy.jpg" alt="Image placeholder" 
+                       style="max-width: 100%; height: auto; max-height: 200px; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                </div>
+                <div style="margin-bottom: 10px;">
+                  <h6 style="color: #333; margin-bottom: 10px; font-size: 14px; font-weight: 600;">Videos</h6>
+                  <img src="/assets/images/videodummy.jpg" alt="Video placeholder" 
+                       style="max-width: 100%; height: auto; max-height: 200px; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                </div>
+                <!-- <p class="text-muted" style="color: #999; margin: 15px 0 0 0; text-align: center;">
+                  <i class="fas fa-images" style="margin-right: 8px;"></i>
+                  No photos or videos available
+                </p>
+                <p class="text-muted" style="color: #999; margin: 10px 0 0 0; font-size: 12px; text-align: center;">
+                  Photos and videos can be viewed in the project details page
+                </p> -->
               </div>
             </div>
           </div>
@@ -616,6 +694,7 @@ export class MapComponent implements AfterViewInit, OnDestroy {
 
   async ngAfterViewInit(): Promise<void> {
     if (isPlatformBrowser(this.platformId)) {
+      this.projectLocationMarkers = this.getProjectLocationMarkersFromLocalStorage();
       await this.initMap();
       this.subscribeToSelections();
 
@@ -644,6 +723,117 @@ export class MapComponent implements AfterViewInit, OnDestroy {
     const user = this.authService.getCurrentLoginUser();
     if (user) {
       this.userProfile.set(user);
+    }
+  }
+
+  private setInitialMapViewByRole(): void {
+    const user = this.userProfile();
+    if (!user || !this.map || !this.L) {
+      return;
+    }
+
+    // Wait for district data to be loaded before setting view
+    setTimeout(() => {
+      if (user.role === 'block_manager' && user.blocks && user.blocks.length > 0 && user.blocks[0] !== 'ALL') {
+        // Block manager: Zoom to their specific block/mouza
+        this.zoomToBlock(user.districts[0], user.blocks[0]);
+      } else if (user.role === 'district_manager' && user.districts && user.districts.length > 0 && user.districts[0] !== 'ALL') {
+        // District manager: Zoom to their district
+        this.zoomToDistrict(user.districts[0]);
+      } else if (user.role === 'state_manager' || user.role === 'admin') {
+        // State manager and Admin: Keep default view (entire state)
+        // Default center and zoom are already set in initMap
+        this.map.setView([28.2, 94.5], 7);
+      }
+    }, 1000); // Wait for district data to load
+  }
+
+  private zoomToDistrict(districtName: string): void {
+    if (!this.geojsonLayer || !this.map) {
+      // Retry if layer not ready
+      setTimeout(() => this.zoomToDistrict(districtName), 500);
+      return;
+    }
+
+    const user = this.userProfile();
+    // For block_manager, we'll zoom to block instead, so skip district zoom
+    // Admin and state_manager don't have this restriction
+    if (user?.role === 'block_manager' && user?.blocks && user.blocks.length > 0 && user.blocks[0] !== 'ALL') {
+      // Wait for mouza layer to load, then zoom to block
+      setTimeout(() => {
+        this.zoomToBlock(districtName, user.blocks[0]);
+      }, 1000);
+      return;
+    }
+
+    let found = false;
+    this.geojsonLayer.eachLayer((layer: any) => {
+      const feature = layer.feature;
+      const name = feature.properties["District N"] || feature.properties.district;
+      if (name === districtName) {
+        const bounds = layer.getBounds();
+        this.map.fitBounds(bounds, {
+          padding: [50, 50],
+          maxZoom: 10
+        });
+        
+        // Highlight the district
+        this.ngZone.run(() => {
+          this.highlightDistrict(layer, districtName);
+        });
+        
+        found = true;
+        return;
+      }
+    });
+
+    if (!found) {
+      // Retry after a delay if district not found yet
+      setTimeout(() => this.zoomToDistrict(districtName), 500);
+    }
+  }
+
+  private zoomToBlock(districtName: string, blockName: string): void {
+    if (!this.mouzaLayer || !this.map) {
+      // Wait for mouza layer to be loaded
+      setTimeout(() => this.zoomToBlock(districtName, blockName), 500);
+      return;
+    }
+
+    // First, ensure district is loaded and highlighted
+    if (!this.geojsonLayer) {
+      setTimeout(() => this.zoomToBlock(districtName, blockName), 500);
+      return;
+    }
+
+    // Find and zoom to the block/mouza
+    let found = false;
+    this.mouzaLayer.eachLayer((layer: any) => {
+      const feature = layer.feature;
+      const name = feature.properties["Mouza Name"] || feature.properties.subdistrict;
+      if (name === blockName) {
+        const bounds = layer.getBounds();
+        this.map.fitBounds(bounds, {
+          padding: [50, 50],
+          maxZoom: 13
+        });
+        
+        // Highlight the mouza
+        this.ngZone.run(() => {
+          this.selectedMouza = blockName;
+          this.highlightMouza(feature, layer);
+          this.mapSelectionService.selectMouza(blockName);
+          this.cdr.detectChanges();
+        });
+        
+        found = true;
+        return;
+      }
+    });
+
+    if (!found) {
+      // If block not found, try zooming to district instead
+      this.zoomToDistrict(districtName);
     }
   }
 
@@ -969,7 +1159,7 @@ export class MapComponent implements AfterViewInit, OnDestroy {
       // Load JavaScript files that export variables
       // These files export json_ArunachalPradeshDistricts_2 and json_ArunachalPradeshMouza_1
 
-      if (this.userProfile()?.role === 'state_manager') {
+      if (this.userProfile()?.role === 'state_manager' || this.userProfile()?.role === 'admin') {
         // Load district script
         await this.loadScript('/assets/data/ArunachalPradeshDistricts_2.js');
 
@@ -1052,6 +1242,11 @@ export class MapComponent implements AfterViewInit, OnDestroy {
     });
 
     this.cdr.detectChanges();
+
+    // Set initial map view based on user role after district layer is set up
+    setTimeout(() => {
+      this.setInitialMapViewByRole();
+    }, 500);
   }
 
   selectedDistrictName: string | null = null;
@@ -1122,8 +1317,16 @@ export class MapComponent implements AfterViewInit, OnDestroy {
       });
     }
 
+    // For block_manager, automatically select their block if not already selecting one
+    // Admin and state_manager don't have this restriction
+    const user = this.userProfile();
+    let blockToSelect = mouzaToSelect;
+    if (!blockToSelect && user?.role === 'block_manager' && user?.blocks && user.blocks.length > 0 && user.blocks[0] !== 'ALL') {
+      blockToSelect = user.blocks[0];
+    }
+
     // Update mouza display
-    this.loadMouzasForDistrict(districtName, layer, mouzaToSelect);
+    this.loadMouzasForDistrict(districtName, layer, blockToSelect);
 
     // Force change detection immediately in Angular zone
     this.ngZone.run(() => {
@@ -1171,6 +1374,23 @@ export class MapComponent implements AfterViewInit, OnDestroy {
    console.log(" LOAD MOUZAS FOR DISTRICT", districtName)
     if (!this.mouzaData || !this.mouzaData.features) return;
 
+    // Check if we need to auto-zoom for block_manager on initial load
+    // Admin and state_manager don't have this restriction
+    const user = this.userProfile();
+    const shouldAutoZoom = user?.role === 'block_manager' && 
+                          user?.blocks && 
+                          user.blocks.length > 0 && 
+                          user.blocks[0] !== 'ALL' &&
+                          !mouzaToSelect; // Only auto-zoom if not already selecting a mouza
+
+    // For block_manager, get their assigned blocks
+    // Admin and state_manager see all blocks
+    const userBlocks = user?.role === 'block_manager' && 
+                      user?.blocks && 
+                      user.blocks[0] !== 'ALL' 
+                      ? user.blocks 
+                      : null;
+
     // Clear previous mouzas
     if (this.mouzaLayer) {
       this.map.removeLayer(this.mouzaLayer);
@@ -1184,6 +1404,14 @@ export class MapComponent implements AfterViewInit, OnDestroy {
     this.mouzaLayer = this.L.geoJSON(this.mouzaData, {
       filter: (f: any) => {
         const mouzaName = f.properties["Mouza Name"] || f.properties.subdistrict || "Unknown";
+
+        // For block_manager, only show their assigned blocks
+        // Admin and state_manager see all blocks
+        if (userBlocks && userBlocks.length > 0) {
+          if (!userBlocks.includes(mouzaName)) {
+            return false; // Filter out blocks not assigned to this block_manager
+          }
+        }
 
         try {
           // Get Mouza centroid (center point)
@@ -1243,6 +1471,29 @@ export class MapComponent implements AfterViewInit, OnDestroy {
           }
         });
       }, 100);
+    }
+
+    // Auto-zoom to block for block_manager on initial load
+    if (shouldAutoZoom && this.mouzaLayer) {
+      setTimeout(() => {
+        const blockName = user.blocks[0];
+        // Find and highlight the block
+        this.mouzaLayer.eachLayer((layer: any) => {
+          const feature = layer.feature;
+          const name = feature.properties["Mouza Name"] || feature.properties.subdistrict;
+          if (name === blockName) {
+            this.ngZone.run(() => {
+              this.selectedMouza = blockName;
+              this.highlightMouza(feature, layer);
+              this.mapSelectionService.selectMouza(blockName);
+              this.cdr.detectChanges();
+            });
+            // Zoom to the block
+            this.zoomToBlock(districtName, blockName);
+            return;
+          }
+        });
+      }, 200);
     }
   }
 
@@ -1541,6 +1792,14 @@ export class MapComponent implements AfterViewInit, OnDestroy {
     }
   ];
 
+  protected projectLocationMarkers: any[] = [];
+  protected currentProjectData: any = null; // Store full project data for the selected location
+  //getfrom local storage
+  private getProjectLocationMarkersFromLocalStorage(): any[] {
+    const projectLocationMarkers = localStorage.getItem('projectData');
+    return projectLocationMarkers ? JSON.parse(projectLocationMarkers) : [];
+  }
+
   private getMarkerIconByType(type: string): any {
     let backgroundColor = '#ff6b35';
     let emoji = '📍';
@@ -1595,12 +1854,12 @@ export class MapComponent implements AfterViewInit, OnDestroy {
       return;
     }
 
-    this.arunachalTop10Locations.forEach(location => {
+    this.projectLocationMarkers.forEach(project => {
       // Create a custom icon based on location type
-      const locationIcon = this.getMarkerIconByType(location.type || 'default');
+      const projectIcon = this.getMarkerIconByType(project.schemeType || 'default');
 
-      const marker = this.L.marker([location.latitude, location.longitude], {
-        icon: locationIcon,
+      const marker = this.L.marker([project.latitude, project.longitude], {
+        icon: projectIcon,
         interactive: true,
         bubblingMouseEvents: false
       }).addTo(this.map);
@@ -1611,7 +1870,7 @@ export class MapComponent implements AfterViewInit, OnDestroy {
         this.L.DomEvent.stop(e);
 
         this.ngZone.run(() => {
-          this.showLocationDetailsPanel(location, marker);
+          this.showLocationDetailsPanel(project, marker);
         });
       });
 
@@ -1629,21 +1888,25 @@ export class MapComponent implements AfterViewInit, OnDestroy {
       });
 
       this.locationMarkers.push(marker);
-      this.locationMarkerMap.set(location.name, marker);
+      this.locationMarkerMap.set(project.activityName, marker);
     });
   }
 
   showLocationDetailsPanel(location: any, marker: any): void {
+    console.log(location);
     // Clear previous marker highlight
     this.clearMarkerHighlight();
 
+    // Store the full project data for later use
+    this.currentProjectData = location;
+
     // Create location object first
     const locationObj = {
-      name: location.name || 'Unknown Location',
+      name: location.activityName || 'Unknown Location',
       latitude: location.latitude,
       longitude: location.longitude,
-      type: location.type || 'default',
-      description: location.description || location.name || 'No description available'
+      type: location.schemeType || 'default',
+      description: location.beneficiaryDetails || location.activityName || 'No description available'
     };
 
     // Initialize panel position to center of screen
@@ -1796,8 +2059,23 @@ export class MapComponent implements AfterViewInit, OnDestroy {
   hideLocationDetailsPanel(): void {
     this.showLocationDetails.set(false);
     this.selectedLocation.set(null);
+    this.currentProjectData = null; // Clear project data when panel is closed
     this.clearMarkerHighlight();
     this.cdr.detectChanges();
+  }
+
+  openProjectInNewTab(): void {
+    if (!this.currentProjectData) {
+      console.warn('No project data available');
+      return;
+    }
+
+    // Store project data in sessionStorage to pass to the new tab
+    sessionStorage.setItem('selectedProjectData', JSON.stringify(this.currentProjectData));
+    
+    // Open the project page in a new tab
+    const baseUrl = window.location.origin;
+    window.open(`${baseUrl}/projects`, '_blank');
   }
 
   setActiveTab(tab: string): void {
@@ -1884,8 +2162,13 @@ export class MapComponent implements AfterViewInit, OnDestroy {
   }
 
   centerOnLocation(location: { name: string; latitude: number; longitude: number; type?: string; description?: string }, districtName?: string | null, mouzaName?: string | null): void {
+    // Try to find the full project data from localStorage
+    let projectData = null;
+    const projects = this.getProjectLocationMarkersFromLocalStorage();
+    projectData = projects.find((p: any) => p.activityName === location.name);
+    
     // Show the panel immediately even if map isn't ready
-    const locationInfo = {
+    const locationInfo = projectData || {
       name: location.name,
       latitude: location.latitude,
       longitude: location.longitude,
@@ -1942,7 +2225,10 @@ export class MapComponent implements AfterViewInit, OnDestroy {
       marker.on('click', (e: any) => {
         this.L.DomEvent.stop(e);
         this.ngZone.run(() => {
-          const locationInfo = {
+          // Try to find the full project data from localStorage
+          const projects = this.getProjectLocationMarkersFromLocalStorage();
+          const projectData = projects.find((p: any) => p.activityName === location.name);
+          const locationInfo = projectData || {
             name: location.name,
             latitude: location.latitude,
             longitude: location.longitude,
@@ -1970,7 +2256,10 @@ export class MapComponent implements AfterViewInit, OnDestroy {
 
     // Update the location panel with the actual marker (panel already shown in centerOnLocation)
     this.ngZone.run(() => {
-      const locationInfo = {
+      // Try to find the full project data from localStorage
+      const projects = this.getProjectLocationMarkersFromLocalStorage();
+      const projectData = projects.find((p: any) => p.activityName === location.name);
+      const locationInfo = projectData || {
         name: location.name,
         latitude: location.latitude,
         longitude: location.longitude,

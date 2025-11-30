@@ -592,6 +592,15 @@ export class MapForInsert implements AfterViewInit, OnDestroy {
   // Map initialization state
   isMapReady: boolean = false;
 
+  // Role-based restrictions
+  private allowedState: string | null = null;
+  private allowedDistrict: string | null = null;
+  private allowedBlock: string | null = null;
+  private allowedDistrictLayer: any = null;
+  private allowedBlockLayer: any = null;
+  private allowedStateBounds: any = null; // Combined bounds of all districts in the state
+  private isRestricted: boolean = false;
+
   availableLayers = [
     { name: 'OpenStreetMap', label: 'OpenStreetMap' },
     { name: 'Satellite', label: 'Satellite' },
@@ -697,6 +706,22 @@ export class MapForInsert implements AfterViewInit, OnDestroy {
     const user = this.authService.getCurrentLoginUser();
     if (user) {
       this.userProfile.set(user);
+      
+      // Set role-based restrictions
+      if (user.role === 'state_manager' && user.state && user.state.length > 0 && user.state[0] !== 'ALL') {
+        this.allowedState = user.state[0];
+        this.isRestricted = true;
+      } else if (user.role === 'district_manager' && user.districts && user.districts.length > 0 && user.districts[0] !== 'ALL') {
+        this.allowedDistrict = user.districts[0];
+        this.isRestricted = true;
+      } else if (user.role === 'block_manager' && user.districts && user.districts.length > 0 && user.blocks && user.blocks.length > 0) {
+        this.allowedDistrict = user.districts[0];
+        this.allowedBlock = user.blocks[0];
+        this.isRestricted = true;
+      } else {
+        // admin - no restrictions
+        this.isRestricted = false;
+      }
     }
   }
 
@@ -901,6 +926,11 @@ export class MapForInsert implements AfterViewInit, OnDestroy {
 
       // Add location markers
       this.addLocationMarkers();
+
+      // Apply role-based restrictions after data is loaded
+      setTimeout(() => {
+        this.applyRoleBasedRestrictions();
+      }, 500);
     } catch (error) {
       console.error('Error initializing map:', error);
       this.isMapReady = false;
@@ -1155,12 +1185,28 @@ export class MapForInsert implements AfterViewInit, OnDestroy {
         const name = feature.properties["District N"] || feature.properties.district;
         districtMap.set(name, layer);
         layer.on('click', (e: any) => {
+    // Check role-based restrictions
+    if (this.isRestricted) {
+      // For state_manager, allow all districts within their state
+      if (this.allowedState && !this.allowedDistrict) {
+        // State manager can select any district - no restriction
+      } 
+      // For district_manager, prevent selection of other districts
+      else if (this.allowedDistrict && name !== this.allowedDistrict) {
+        this.showRestrictionMessage(`You can only work within ${this.allowedDistrict} district.`);
+        return;
+      }
+    }
+
           // Check if this district is already selected
           if (this.selectedDistrict === name) {
             // Already selected - allow location picking by calling pickLocation directly
             const latlng = e.latlng || (e.originalEvent ? this.map.mouseEventToLatLng(e.originalEvent) : null);
             if (latlng) {
-              this.pickLocation(latlng);
+              // Check if click is within allowed bounds
+              if (this.isClickAllowed(latlng)) {
+                this.pickLocation(latlng);
+              }
             }
             return;
           }
@@ -1356,12 +1402,25 @@ export class MapForInsert implements AfterViewInit, OnDestroy {
       onEachFeature: (feature: any, layer: any) => {
         const mouzaName = feature.properties["Mouza Name"] || feature.properties.subdistrict;
         layer.on('click', (e: any) => {
+          // Check role-based restrictions for block_manager
+          if (this.isRestricted && this.allowedBlock && mouzaName !== this.allowedBlock) {
+            // Prevent selection of other blocks
+            this.showRestrictionMessage(`You can only work within ${this.allowedBlock} block.`);
+            return;
+          }
+          
+          // For state_manager and district_manager, allow all mouzas within their allowed area
+          // (no additional restriction needed here as district restriction is already checked)
+
           // Check if this mouza is already selected
           if (this.selectedMouza === mouzaName) {
             // Already selected - allow location picking by calling pickLocation directly
             const latlng = e.latlng || (e.originalEvent ? this.map.mouseEventToLatLng(e.originalEvent) : null);
             if (latlng) {
-              this.pickLocation(latlng);
+              // Check if click is within allowed bounds
+              if (this.isClickAllowed(latlng)) {
+                this.pickLocation(latlng);
+              }
             }
             return;
           }
@@ -2198,6 +2257,22 @@ export class MapForInsert implements AfterViewInit, OnDestroy {
       return;
     }
 
+    // Check if click is within allowed bounds for restricted users
+    if (this.isRestricted && !this.isClickAllowed(e.latlng)) {
+      let restrictionMsg = '';
+      if (this.allowedBlock) {
+        restrictionMsg = `You can only select locations within ${this.allowedBlock} block.`;
+      } else if (this.allowedDistrict) {
+        restrictionMsg = `You can only select locations within ${this.allowedDistrict} district.`;
+      } else if (this.allowedState) {
+        restrictionMsg = `You can only select locations within ${this.allowedState} state.`;
+      }
+      if (restrictionMsg) {
+        this.showRestrictionMessage(restrictionMsg);
+      }
+      return;
+    }
+
     // Use a delay to check if a layer was just clicked
     // This allows location picking even inside highlighted areas after initial selection
     setTimeout(() => {
@@ -2213,6 +2288,22 @@ export class MapForInsert implements AfterViewInit, OnDestroy {
 
   private pickLocation(latlng: any): void {
     if (!this.map || !this.L) {
+      return;
+    }
+
+    // Check if location is within allowed bounds for restricted users
+    if (this.isRestricted && !this.isClickAllowed(latlng)) {
+      let restrictionMsg = '';
+      if (this.allowedBlock) {
+        restrictionMsg = `You can only select locations within ${this.allowedBlock} block.`;
+      } else if (this.allowedDistrict) {
+        restrictionMsg = `You can only select locations within ${this.allowedDistrict} district.`;
+      } else if (this.allowedState) {
+        restrictionMsg = `You can only select locations within ${this.allowedState} state.`;
+      }
+      if (restrictionMsg) {
+        this.showRestrictionMessage(restrictionMsg);
+      }
       return;
     }
 
@@ -2259,10 +2350,60 @@ export class MapForInsert implements AfterViewInit, OnDestroy {
       </div>
     `).openPopup();
 
-    // Handle marker drag
+    // Store previous position for drag bounds checking
+    let previousLatLng: any = null;
+    this.locationPickerMarker.on('dragstart', () => {
+      previousLatLng = this.locationPickerMarker.getLatLng();
+    });
+
+    // Handle marker drag with bounds checking
+    this.locationPickerMarker.on('drag', (dragEvent: any) => {
+      if (this.isRestricted) {
+        const newLat = dragEvent.target.getLatLng().lat;
+        const newLng = dragEvent.target.getLatLng().lng;
+        const newLatLng = this.L.latLng(newLat, newLng);
+        
+        // Check if dragged position is within allowed bounds
+        if (!this.isClickAllowed(newLatLng) && previousLatLng) {
+          // Revert to previous valid position
+          dragEvent.target.setLatLng(previousLatLng);
+        } else {
+          // Update previous position if valid
+          previousLatLng = newLatLng;
+        }
+      }
+    });
+
     this.locationPickerMarker.on('dragend', (dragEvent: any) => {
-      const newLat = dragEvent.target.getLatLng().lat;
-      const newLng = dragEvent.target.getLatLng().lng;
+      let newLat = dragEvent.target.getLatLng().lat;
+      let newLng = dragEvent.target.getLatLng().lng;
+      const newLatLng = this.L.latLng(newLat, newLng);
+      
+      // Final check - if outside bounds, snap back to allowed area
+      if (this.isRestricted && !this.isClickAllowed(newLatLng)) {
+        let restrictionMsg = '';
+        let validLatLng = newLatLng;
+        
+        if (this.allowedBlock && this.allowedBlockLayer) {
+          restrictionMsg = `You can only place markers within ${this.allowedBlock} block.`;
+          const bounds = this.allowedBlockLayer.getBounds();
+          validLatLng = bounds.getCenter();
+        } else if (this.allowedDistrict && this.allowedDistrictLayer) {
+          restrictionMsg = `You can only place markers within ${this.allowedDistrict} district.`;
+          const bounds = this.allowedDistrictLayer.getBounds();
+          validLatLng = bounds.getCenter();
+        } else if (this.allowedState && this.allowedStateBounds) {
+          restrictionMsg = `You can only place markers within ${this.allowedState} state.`;
+          validLatLng = this.allowedStateBounds.getCenter();
+        }
+        
+        if (restrictionMsg) {
+          this.showRestrictionMessage(restrictionMsg);
+          dragEvent.target.setLatLng(validLatLng);
+          newLat = validLatLng.lat;
+          newLng = validLatLng.lng;
+        }
+      }
       
       // Update popup with new coordinates
       this.locationPickerMarker.setPopupContent(`
@@ -2321,7 +2462,36 @@ export class MapForInsert implements AfterViewInit, OnDestroy {
       const lng = Number(longitude);
 
       if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
-        console.log("Updating location picker marker at:", lat, lng);
+        let finalLat = lat;
+        let finalLng = lng;
+        const latlng = this.L.latLng(lat, lng);
+        
+        // Check if location is within allowed bounds for restricted users
+        if (this.isRestricted && !this.isClickAllowed(latlng)) {
+          let restrictionMsg = '';
+          let validLatLng = latlng;
+          
+          if (this.allowedBlock && this.allowedBlockLayer) {
+            restrictionMsg = `You can only set locations within ${this.allowedBlock} block.`;
+            const bounds = this.allowedBlockLayer.getBounds();
+            validLatLng = bounds.getCenter();
+          } else if (this.allowedDistrict && this.allowedDistrictLayer) {
+            restrictionMsg = `You can only set locations within ${this.allowedDistrict} district.`;
+            const bounds = this.allowedDistrictLayer.getBounds();
+            validLatLng = bounds.getCenter();
+          } else if (this.allowedState && this.allowedStateBounds) {
+            restrictionMsg = `You can only set locations within ${this.allowedState} state.`;
+            validLatLng = this.allowedStateBounds.getCenter();
+          }
+          
+          if (restrictionMsg) {
+            this.showRestrictionMessage(restrictionMsg);
+          }
+          finalLat = validLatLng.lat;
+          finalLng = validLatLng.lng;
+        }
+        
+        console.log("Updating location picker marker at:", finalLat, finalLng);
         // Remove previous marker
         this.clearLocationPickerMarker();
 
@@ -2348,7 +2518,7 @@ export class MapForInsert implements AfterViewInit, OnDestroy {
           popupAnchor: [0, -32]
         });
 
-        this.locationPickerMarker = this.L.marker([lat, lng], {
+        this.locationPickerMarker = this.L.marker([finalLat, finalLng], {
           icon: pickerIcon,
           draggable: true,
           zIndexOffset: 10000
@@ -2358,14 +2528,64 @@ export class MapForInsert implements AfterViewInit, OnDestroy {
         this.locationPickerMarker.bindPopup(`
           <div style="text-align: center; padding: 5px;">
             <strong>Selected Location</strong><br>
-            <small>Lat: ${lat.toFixed(6)}<br>Lng: ${lng.toFixed(6)}</small>
+            <small>Lat: ${finalLat.toFixed(6)}<br>Lng: ${finalLng.toFixed(6)}</small>
           </div>
         `);
 
-        // Handle marker drag
+        // Store previous position for drag bounds checking
+        let previousLatLngForSet: any = this.L.latLng(finalLat, finalLng);
+        this.locationPickerMarker.on('dragstart', () => {
+          previousLatLngForSet = this.locationPickerMarker.getLatLng();
+        });
+
+        // Handle marker drag with bounds checking
+        this.locationPickerMarker.on('drag', (dragEvent: any) => {
+          if (this.isRestricted) {
+            const newLat = dragEvent.target.getLatLng().lat;
+            const newLng = dragEvent.target.getLatLng().lng;
+            const newLatLng = this.L.latLng(newLat, newLng);
+            
+            // Check if dragged position is within allowed bounds
+            if (!this.isClickAllowed(newLatLng) && previousLatLngForSet) {
+              // Revert to previous valid position
+              dragEvent.target.setLatLng(previousLatLngForSet);
+            } else {
+              // Update previous position if valid
+              previousLatLngForSet = newLatLng;
+            }
+          }
+        });
+
         this.locationPickerMarker.on('dragend', (dragEvent: any) => {
-          const newLat = dragEvent.target.getLatLng().lat;
-          const newLng = dragEvent.target.getLatLng().lng;
+          let newLat = dragEvent.target.getLatLng().lat;
+          let newLng = dragEvent.target.getLatLng().lng;
+          const newLatLng = this.L.latLng(newLat, newLng);
+          
+          // Final check - if outside bounds, snap back to allowed area
+          if (this.isRestricted && !this.isClickAllowed(newLatLng)) {
+            let restrictionMsg = '';
+            let validLatLng = newLatLng;
+            
+            if (this.allowedBlock && this.allowedBlockLayer) {
+              restrictionMsg = `You can only place markers within ${this.allowedBlock} block.`;
+              const bounds = this.allowedBlockLayer.getBounds();
+              validLatLng = bounds.getCenter();
+            } else if (this.allowedDistrict && this.allowedDistrictLayer) {
+              restrictionMsg = `You can only place markers within ${this.allowedDistrict} district.`;
+              const bounds = this.allowedDistrictLayer.getBounds();
+              validLatLng = bounds.getCenter();
+            } else if (this.allowedState && this.allowedStateBounds) {
+              restrictionMsg = `You can only place markers within ${this.allowedState} state.`;
+              validLatLng = this.allowedStateBounds.getCenter();
+            }
+            
+            if (restrictionMsg) {
+              this.showRestrictionMessage(restrictionMsg);
+              dragEvent.target.setLatLng(validLatLng);
+              newLat = validLatLng.lat;
+              newLng = validLatLng.lng;
+            }
+          }
           
           this.locationPickerMarker.setPopupContent(`
             <div style="text-align: center; padding: 5px;">
@@ -2380,11 +2600,194 @@ export class MapForInsert implements AfterViewInit, OnDestroy {
         });
 
         // Center map on location
-        this.map.setView([lat, lng], 13, {
+        this.map.setView([finalLat, finalLng], 13, {
           animate: true,
           duration: 0.5
         });
       }
+    }
+  }
+
+  // Check if a click is within allowed bounds based on user role
+  private isClickAllowed(latlng: any): boolean {
+    if (!this.isRestricted) {
+      return true; // No restrictions for admin
+    }
+
+    if (!this.map || !this.L) {
+      return false;
+    }
+
+    // For block_manager, check if click is within allowed block
+    if (this.allowedBlock && this.allowedBlockLayer) {
+      return this.isPointInLayer(latlng, this.allowedBlockLayer);
+    }
+
+    // For district_manager, check if click is within allowed district
+    if (this.allowedDistrict && this.allowedDistrictLayer) {
+      return this.isPointInLayer(latlng, this.allowedDistrictLayer);
+    }
+
+    // For state_manager, check if click is within state bounds (all districts combined)
+    if (this.allowedState && this.allowedStateBounds) {
+      return this.allowedStateBounds.contains(latlng);
+    }
+
+    return false;
+  }
+
+  // Apply role-based restrictions after map and data are loaded
+  private applyRoleBasedRestrictions(): void {
+    if (!this.isMapReady || !this.map || !this.L) {
+      return;
+    }
+
+    const user = this.userProfile();
+    if (!user || !this.isRestricted) {
+      return;
+    }
+
+    // For state_manager, calculate state bounds from all districts
+    if (this.allowedState && this.geojsonLayer) {
+      const allBounds: any[] = [];
+      this.geojsonLayer.eachLayer((layer: any) => {
+        const bounds = layer.getBounds();
+        allBounds.push(bounds);
+      });
+      
+      if (allBounds.length > 0) {
+        // Combine all district bounds to get state bounds
+        // Start with first bounds and extend with all others
+        this.allowedStateBounds = allBounds[0];
+        for (let i = 1; i < allBounds.length; i++) {
+          this.allowedStateBounds.extend(allBounds[i]);
+        }
+        
+        // Zoom to state bounds
+        this.map.fitBounds(this.allowedStateBounds, {
+          padding: [50, 50],
+          maxZoom: 8
+        });
+      }
+    }
+
+    // Find and highlight allowed district
+    if (this.allowedDistrict && this.geojsonLayer) {
+      this.geojsonLayer.eachLayer((layer: any) => {
+        const feature = layer.feature;
+        const name = feature.properties["District N"] || feature.properties.district;
+        if (name === this.allowedDistrict) {
+          this.allowedDistrictLayer = layer;
+          
+          // Highlight and zoom to district
+          this.ngZone.run(() => {
+            this.highlightDistrict(layer, name, this.allowedBlock || undefined);
+          });
+
+          // For block_manager, also find and highlight the block
+          if (this.allowedBlock) {
+            setTimeout(() => {
+              if (this.mouzaLayer) {
+                this.mouzaLayer.eachLayer((mouzaLayer: any) => {
+                  const mouzaFeature = mouzaLayer.feature;
+                  const mouzaName = mouzaFeature.properties["Mouza Name"] || mouzaFeature.properties.subdistrict;
+                  if (mouzaName === this.allowedBlock) {
+                    this.allowedBlockLayer = mouzaLayer;
+                    this.ngZone.run(() => {
+                      this.selectedMouza = mouzaName;
+                      this.highlightMouza(mouzaFeature, mouzaLayer);
+                      this.mapSelectionService.selectMouza(mouzaName);
+                      this.cdr.detectChanges();
+                    });
+                    
+                    // Zoom to block bounds
+                    const bounds = mouzaLayer.getBounds();
+                    this.map.fitBounds(bounds, {
+                      padding: [50, 50],
+                      maxZoom: 14
+                    });
+                  }
+                });
+              }
+            }, 300);
+          } else {
+            // For district_manager, zoom to district bounds
+            const bounds = layer.getBounds();
+            this.map.fitBounds(bounds, {
+              padding: [50, 50],
+              maxZoom: 12
+            });
+          }
+        }
+      });
+    }
+
+    // Restrict map panning/dragging outside allowed bounds
+    if (this.isRestricted) {
+      this.map.on('moveend', () => {
+        this.enforceBoundsRestriction();
+      });
+    }
+  }
+
+  // Enforce bounds restriction by preventing panning outside allowed area
+  private enforceBoundsRestriction(): void {
+    if (!this.isRestricted || !this.map || !this.L) {
+      return;
+    }
+
+    let allowedBounds: any = null;
+
+    // Get bounds for allowed area
+    if (this.allowedBlock && this.allowedBlockLayer) {
+      allowedBounds = this.allowedBlockLayer.getBounds();
+    } else if (this.allowedDistrict && this.allowedDistrictLayer) {
+      allowedBounds = this.allowedDistrictLayer.getBounds();
+    } else if (this.allowedState && this.allowedStateBounds) {
+      allowedBounds = this.allowedStateBounds;
+    }
+
+    if (allowedBounds) {
+      const mapBounds = this.map.getBounds();
+      const center = this.map.getCenter();
+
+      // Check if center is within allowed bounds
+      if (!allowedBounds.contains(center)) {
+        // Pan back to allowed area
+        const newCenter = allowedBounds.getCenter();
+        this.map.setView(newCenter, this.map.getZoom(), {
+          animate: false
+        });
+      }
+    }
+  }
+
+  // Show restriction message to user
+  private showRestrictionMessage(message: string): void {
+    // Create a temporary popup to show the message
+    if (this.map && this.L) {
+      const popup = this.L.popup({
+        className: 'restriction-popup',
+        closeButton: true,
+        autoClose: true,
+        autoPan: false,
+        closeOnClick: false
+      })
+        .setLatLng(this.map.getCenter())
+        .setContent(`
+          <div style="text-align: center; padding: 10px;">
+            <i class="fa-solid fa-exclamation-triangle" style="color: #ff6b35; font-size: 24px; margin-bottom: 8px;"></i>
+            <p style="margin: 0; font-weight: bold; color: #333;">${message}</p>
+          </div>
+        `)
+        .openOn(this.map);
+
+      // Auto-close after 3 seconds
+      setTimeout(() => {
+        if (this.map) {
+          this.map.closePopup();
+        }
+      }, 3000);
     }
   }
 }
